@@ -10,7 +10,7 @@ video_source = jdata["video_source"]
 class App:
     def __init__(self, window, video_source):
         self.window = window
-        self.window.title("MediaPipe 手部追蹤與手勢辨識 - DroidCam USB")
+        self.window.title("MediaPipe 手部追蹤")
         self.video_source = video_source
 
         # 開啟攝影機
@@ -44,47 +44,43 @@ class App:
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.window.mainloop()
 
-    def detect_gesture(self, hand_landmarks):
-        # 手指的關鍵點索引 (不包含拇指)
+    def detect_number(self, hand_landmarks):
+        count = 0
+        # 非拇指手指
         finger_tips = [8, 12, 16, 20]
         finger_pips = [6, 10, 14, 18]
-        count_extended = 0
-
         for tip, pip in zip(finger_tips, finger_pips):
-            # 注意：影像中 y 值越小代表越往上
             if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
-                count_extended += 1
+                count += 1
 
-        # 簡單分類：全收縮為握拳，全部伸展為全開，其它視為其他手勢
-        if count_extended == 0:
-            return "握拳"
-        elif count_extended == 4:
-            return "全開"
-        else:
-            return "其他"
+        # 判斷拇指（假設右手，若使用左手可能需要反過來比較 x 值）
+        if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x:
+            count += 1
+
+        return count
 
     def update(self):
         ret, frame = self.cap.read()
         if ret:
-            # 將影像從 BGR 轉為 RGB
+            # 轉換 BGR 為 RGB，MediaPipe 與 PIL 皆使用 RGB 色彩空間
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # 使用 MediaPipe 進行手部偵測
             results = self.hands.process(image)
-            gesture_text = ""
+            number_text = ""
             if results.multi_hand_landmarks:
                 for handLms in results.multi_hand_landmarks:
-                    # 畫出手部關鍵點與連線
+                    # 在影像上畫出手部關鍵點與連線
                     self.mp_draw.draw_landmarks(image, handLms, self.mp_hands.HAND_CONNECTIONS)
-                    # 偵測手勢
-                    gesture = self.detect_gesture(handLms)
-                    gesture_text = gesture  # 目前僅處理第一隻手
-                    # 你可以在這裡印出或記錄更多資訊
+                    # 偵測並取得伸展手指的數量
+                    number = self.detect_number(handLms)
+                    number_text = str(number)
+                    # 目前只處理第一隻手
             # 將處理後的影像轉為 PIL 影像，再轉為 ImageTk 格式供 Tkinter 顯示
             img = Image.fromarray(image)
             self.photo = ImageTk.PhotoImage(image=img)
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
-            # 在畫布上顯示手勢文字（左上角）
-            self.canvas.create_text(10, 20, anchor=tk.NW, text=gesture_text, fill="red", font=("Arial", 20))
+            # 在畫布左上角顯示手勢識別的數字
+            self.canvas.create_text(10, 20, anchor=tk.NW, text=number_text, fill="red", font=("Arial", 20))
         self.window.after(self.delay, self.update)
 
     def on_closing(self):
