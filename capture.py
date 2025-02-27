@@ -34,6 +34,17 @@ class App:
         self.window.title("MediaPipe 手部追蹤")
         self.video_source = video_source
 
+         # 使用 grid 佈局，建立兩個主要區域：左側為視訊區、右側為控制區
+        self.video_frame = tk.Frame(window)
+        self.control_frame = tk.Frame(window)
+        self.video_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.control_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+
+        # 設定視窗 grid 欄與列的擴展比例
+        window.grid_rowconfigure(0, weight=1)
+        window.grid_columnconfigure(0, weight=3)  # 視訊區較大
+        window.grid_columnconfigure(1, weight=1)  # 控制區較小
+
         # 開啟攝影機
         self.cap = open_video_source(self.video_source)
         if not self.cap or not self.cap.isOpened():
@@ -43,9 +54,15 @@ class App:
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # 建立 Tkinter Canvas 顯示影像
-        self.canvas = tk.Canvas(window, width=self.width, height=self.height)
+        # 在左側視訊區建立 Canvas 顯示影像
+        self.canvas = tk.Canvas(self.video_frame, width=self.width, height=self.height)
         self.canvas.pack()
+
+        # 在右側控制區新增一些控制元件 (這裡以狀態標籤與退出按鈕為例)
+        self.status_label = tk.Label(self.control_frame, text="狀態：運行中", font=("Arial", 14))
+        self.status_label.pack(pady=10)
+        self.exit_button = tk.Button(self.control_frame, text="退出", font=("Arial", 12), command=self.on_closing)
+        self.exit_button.pack(pady=10)
 
         # 初始化 MediaPipe Hands
         self.mp_hands = mp.solutions.hands
@@ -63,18 +80,16 @@ class App:
 
         # 設定視窗關閉事件
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.window.mainloop()
 
     def detect_number(self, hand_landmarks, handedness):
         count = 0
-        # 非拇指手指
         finger_tips = [8, 12, 16, 20]
         finger_pips = [6, 10, 14, 18]
         for tip, pip in zip(finger_tips, finger_pips):
             if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
                 count += 1
 
-        # 判斷拇指根據 handedness
+        # 根據 handedness 判斷拇指
         if handedness == "Right":
             if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x:
                 count += 1
@@ -116,3 +131,4 @@ class App:
 if __name__ == '__main__':
     root = tk.Tk()
     App(root, video_source)
+    root.mainloop()
