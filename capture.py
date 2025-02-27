@@ -7,6 +7,27 @@ with open("setting.json", 'r', encoding='utf8') as jfile:
 
 video_source = jdata["video_source"]
 
+def open_video_source(config):
+
+    cap = None
+
+    if isinstance(config, str) and config.startswith("http"):
+        cap = cv2.VideoCapture(config)
+        if cap.isOpened():
+            print("已使用網路串流", config)
+            return cap
+        else:
+            cap.release
+            print("無法開啟網路串流，改為USB攝影機", config)
+
+    cap = cv2.VideoCapture(1)
+    if cap.isOpened():
+        print("已開啟USB攝影機，索引 1 ")
+        return cap
+    else:
+        cap.release
+        raise ValueError("網路串流與USB攝影機(索引1)均無法開啟。")
+
 class App:
     def __init__(self, window, video_source):
         self.window = window
@@ -14,9 +35,9 @@ class App:
         self.video_source = video_source
 
         # 開啟攝影機
-        self.cap = cv2.VideoCapture(self.video_source)
-        if not self.cap.isOpened():
-            raise ValueError("無法開啟攝影機", self.video_source)
+        self.cap = open_video_source(self.video_source)
+        if not self.cap or not self.cap.isOpened():
+            raise ValueError("無法開啟視訊來源", self.video_source)
 
         # 取得影像尺寸
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -44,7 +65,7 @@ class App:
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.window.mainloop()
 
-    def detect_number(self, hand_landmarks):
+    def detect_number(self, hand_landmarks, handedness):
         count = 0
         # 非拇指手指
         finger_tips = [8, 12, 16, 20]
@@ -53,33 +74,37 @@ class App:
             if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
                 count += 1
 
-        # 判斷拇指（假設右手，若使用左手可能需要反過來比較 x 值）
-        if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x:
-            count += 1
+        # 判斷拇指根據 handedness
+        if handedness == "Right":
+            if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x:
+                count += 1
+        elif handedness == "Left":
+            if hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x:
+                count += 1
 
         return count
 
     def update(self):
         ret, frame = self.cap.read()
         if ret:
-            # 轉換 BGR 為 RGB，MediaPipe 與 PIL 皆使用 RGB 色彩空間
+            # 將影像從 BGR 轉為 RGB
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # 使用 MediaPipe 進行手部偵測
             results = self.hands.process(image)
             number_text = ""
-            if results.multi_hand_landmarks:
-                for handLms in results.multi_hand_landmarks:
-                    # 在影像上畫出手部關鍵點與連線
+            if results.multi_hand_landmarks and results.multi_handedness:
+                # 逐一處理每一隻手
+                for handLms, handLabel in zip(results.multi_hand_landmarks, results.multi_handedness):
+                    # 取得 handedness label ( "Left" 或 "Right" )
+                    label = handLabel.classification[0].label
                     self.mp_draw.draw_landmarks(image, handLms, self.mp_hands.HAND_CONNECTIONS)
-                    # 偵測並取得伸展手指的數量
-                    number = self.detect_number(handLms)
-                    number_text = str(number)
-                    # 目前只處理第一隻手
+                    number = self.detect_number(handLms, label)
+                    number_text += f"{label}: {number}\n"
             # 將處理後的影像轉為 PIL 影像，再轉為 ImageTk 格式供 Tkinter 顯示
             img = Image.fromarray(image)
             self.photo = ImageTk.PhotoImage(image=img)
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
-            # 在畫布左上角顯示手勢識別的數字
+            # 在畫布左上角顯示手勢識別的數字與左右手標籤
             self.canvas.create_text(10, 20, anchor=tk.NW, text=number_text, fill="red", font=("Arial", 20))
         self.window.after(self.delay, self.update)
 
