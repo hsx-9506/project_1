@@ -14,19 +14,19 @@ def open_video_source(config):
     if isinstance(config, str) and config.startswith("http"):
         cap = cv2.VideoCapture(config)
         if cap.isOpened():
-            print("已使用網路串流", config)
+            print(f"已使用網路串流 {config}\n")
             return cap
         else:
             cap.release
-            print("無法開啟網路串流，改為USB攝影機", config)
+            print(f"無法開啟網路串流，改為USB攝影機 {config}\n")
 
     cap = cv2.VideoCapture(1)
     if cap.isOpened():
-        print("已開啟USB攝影機，索引 1 ")
+        print("已開啟USB攝影機，索引 1 \n")
         return cap
     else:
         cap.release
-        raise ValueError("網路串流與USB攝影機(索引1)均無法開啟。")
+        raise ValueError("網路串流與USB攝影機(索引1)均無法開啟\n")
 
 class App:
     def __init__(self, window, video_source):
@@ -37,7 +37,7 @@ class App:
         # 開啟攝影機
         self.cap = open_video_source(self.video_source)
         if not self.cap or not self.cap.isOpened():
-            raise ValueError("無法開啟視訊來源", self.video_source)
+            raise ValueError(f"無法開啟視訊來源 {self.video_source}\n")
 
         # 取得影像尺寸
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
