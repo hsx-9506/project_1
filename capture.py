@@ -2,7 +2,7 @@ import cv2, json
 import mediapipe as mp
 import tkinter as tk
 from tkinter import ttk
-from PIL import Image, ImageTk, ImageDraw, ImageFont
+from PIL import Image, ImageTk
 
 with open("setting.json", 'r', encoding='utf8') as jfile:
     jdata = json.load(jfile)
@@ -11,7 +11,7 @@ video_sources = [jdata["video_source"], 1]  # 預設為網路串流，次選 USB
 current_camera = 0  # 當前攝影機索引
 
 def open_video_source(index):
-    """嘗試使用當前索引的視訊來源"""
+    # 嘗試使用當前索引的視訊來源
     cap = cv2.VideoCapture(video_sources[index])
     if cap.isOpened():
         print(f"已開啟攝影機: {video_sources[index]}\n")
