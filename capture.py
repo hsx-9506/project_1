@@ -7,7 +7,7 @@ from tensorflow.keras.models import load_model
 import numpy as np
 
 # 讀取設定
-with open("setting.json", 'r', encoding='utf8') as jfile:
+with open(".vscode/setting.json", 'r', encoding='utf8') as jfile:
     jdata = json.load(jfile)
 
 # 讀取手勢識別模型
