@@ -3,15 +3,23 @@ import mediapipe as mp
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
+from tensorflow.keras.models import load_model
+import numpy as np
 
+# 讀取設定
 with open("setting.json", 'r', encoding='utf8') as jfile:
     jdata = json.load(jfile)
 
-video_sources = [jdata["video_source"], 1]  # 預設為網路串流，次選 USB 攝影機
-current_camera = 0  # 當前攝影機索引
+# 讀取手勢識別模型
+model = load_model("gesture_model.h5")
+gesture_labels = ["victory ✌️", "fist ✊", "ok 👌", "middle 🖕", "thumbs_up 👍", "heart 🤏"]
 
+# 預設使用 USB 攝影機 (0)，若無法開啟則改用串流
+video_sources = [0, jdata["video_source"]]
+current_camera = 0
+
+# 開啟攝影機
 def open_video_source(index):
-    # 嘗試使用當前索引的視訊來源
     cap = cv2.VideoCapture(video_sources[index])
     if cap.isOpened():
         print(f"已開啟攝影機: {video_sources[index]}\n")
@@ -23,13 +31,13 @@ def open_video_source(index):
 class App:
     def __init__(self, window):
         self.window = window
-        self.window.title("🖐 手勢數字辨識 - 攝影機切換")
-        self.window.configure(bg="#1e1e1e")  
+        self.window.title("🖐 手勢數字 & AI 手勢識別")
+        self.window.configure(bg="#1e1e1e")
 
         global current_camera
         self.cap = open_video_source(current_camera)
 
-        # **設定 UI 風格**
+        # 設定 UI 風格
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("TFrame", background="#252526")  
@@ -38,15 +46,7 @@ class App:
                         font=("Microsoft JhengHei", 12, "bold"), padding=10, borderwidth=0, relief="flat")
         style.map("Rounded.TButton", background=[("active", "#505050")])  
 
-        # **標題區域**
-        self.header_frame = tk.Frame(window, bg="#252526", height=50, padx=15, pady=5, relief="flat")
-        self.header_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
-
-        self.title_label = tk.Label(self.header_frame, text="攝影機切換 & 手勢數字辨識", font=("Microsoft JhengHei", 14, "bold"),
-                                    bg="#252526", fg="white", anchor="w")
-        self.title_label.pack(side="left", fill="x", expand=True)
-
-        # **主要區域**
+        # 主要 UI 佈局
         self.video_frame = tk.Frame(window, bg="#1e1e1e")
         self.control_frame = tk.Frame(window, bg="#252526", width=200)
 
@@ -57,7 +57,7 @@ class App:
         window.grid_columnconfigure(0, weight=3)  
         window.grid_columnconfigure(1, weight=1)  
 
-        # **影像區域**
+        # 影像顯示區
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -65,7 +65,7 @@ class App:
                                 highlightthickness=0, borderwidth=0)  
         self.canvas.pack(fill="both", expand=True)  
 
-        # **左右手數字辨識顯示區**
+        # 左手顯示區
         self.left_hand_label = tk.Label(self.control_frame, text="左手比的數字：", font=("Microsoft JhengHei", 14, "bold"), 
                                         bg="#252526", fg="white")
         self.left_hand_label.pack(pady=5)
@@ -74,6 +74,7 @@ class App:
                                           bg="#252526", fg="white")
         self.left_hand_display.pack(pady=5)
 
+        # 右手顯示區
         self.right_hand_label = tk.Label(self.control_frame, text="右手比的數字：", font=("Microsoft JhengHei", 14, "bold"), 
                                          bg="#252526", fg="white")
         self.right_hand_label.pack(pady=5)
@@ -82,14 +83,22 @@ class App:
                                            bg="#252526", fg="white")
         self.right_hand_display.pack(pady=5)
 
-        # **按鈕**
+        # 按鈕區
         self.switch_button = ttk.Button(self.control_frame, text="切換攝影機 (C)", style="Rounded.TButton", command=self.switch_camera)
         self.switch_button.pack(pady=10)
+
+        self.mode_label = tk.Label(self.control_frame, text="目前模式：數字辨識模式", font=("Microsoft JhengHei", 12),
+                                   bg="#252526", fg="lightgreen")
+        self.mode_label.pack(pady=10)
+        self.mode_button = ttk.Button(self.control_frame, text="切換模式 (M)", 
+                                      style="Rounded.TButton", command=self.switch_mode)
+        self.mode_button.pack(pady=5)
 
         self.exit_button = ttk.Button(self.control_frame, text="退出", style="Rounded.TButton", command=self.on_closing)
         self.exit_button.pack(pady=10)
 
-        # **MediaPipe 設定**
+        # 變數
+        self.is_advanced_mode = False
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(static_image_mode=False, max_num_hands=2,
                                          min_detection_confidence=0.7, min_tracking_confidence=0.5)
@@ -99,14 +108,15 @@ class App:
         self.update()
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # **綁定鍵盤事件 (C 鍵切換攝影機)**
         self.window.bind("<c>", lambda event: self.switch_camera())
+        self.window.bind("<m>", lambda event: self.switch_mode())
 
-    def detect_number(self, hand_landmarks, is_right):
+    def detect_number(self, hand_landmarks, hand_type):
         """計算手比的數字 (包含拇指)"""
         count = 0
         finger_tips = [8, 12, 16, 20]  # 食指～小指
         finger_pips = [6, 10, 14, 18]
+        
         for tip, pip in zip(finger_tips, finger_pips):
             if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
                 count += 1
@@ -115,37 +125,64 @@ class App:
         thumb_tip = hand_landmarks.landmark[4]
         thumb_ip = hand_landmarks.landmark[3]
 
-        if is_right and thumb_tip.x < thumb_ip.x:
-            count += 1
-        elif not is_right and thumb_tip.x > thumb_ip.x:
-            count += 1
+        if hand_type == "Right":  # 右手
+            if thumb_tip.x < thumb_ip.x:  
+                count += 1
+        else:  # 左手
+            if thumb_tip.x > thumb_ip.x:  
+                count += 1
 
         return count
+    
+    def predict_gesture(self, hand_landmarks):
+        """使用 AI 模型預測手勢，並加入信心門檻 & Top-2 修正"""
+        landmarks = []
+        for lm in hand_landmarks.landmark:
+            landmarks.extend([lm.x, lm.y])
+
+        data = np.array(landmarks).reshape(1, 42)  # 21 個點的 x, y 座標
+        prediction = model.predict(data)[0]  # 取得預測結果
+        top_2_indices = np.argsort(prediction)[-2:]  # 找到最高和次高的索引
+        top_1_index, top_2_index = top_2_indices[::-1]  # 最高 → 次高
+        top_1_confidence = prediction[top_1_index]
+        top_2_confidence = prediction[top_2_index]
+
+        # 只顯示信心值超過 70% 的結果
+        if top_1_confidence >= 0.7:
+            return f"{gesture_labels[top_1_index]} ({top_1_confidence*100:.1f}%)"
+        elif top_2_confidence >= 0.5:  # 若最高的低於 70%，但次高的超過 50%
+            return f"{gesture_labels[top_2_index]} ({top_2_confidence*100:.1f}%)"
+        else:
+            return "不確定 🤔"
 
     def update(self):
         ret, frame = self.cap.read()
         if ret:
-            if current_camera == 0:
-                frame = cv2.flip(frame, 1)
-
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = self.hands.process(image)
-            left_hand_count, right_hand_count = "未偵測", "未偵測"
+
+            left_result, right_result = "未偵測", "未偵測"
 
             if results.multi_hand_landmarks and results.multi_handedness:
                 for handLms, handLabel in zip(results.multi_hand_landmarks, results.multi_handedness):
-                    label = handLabel.classification[0].label  
-                    count = self.detect_number(handLms, label == "Right")
+                    label = handLabel.classification[0].label  # "Left" or "Right"
+
+                    # 根據模式選擇數字辨識 or 手勢識別
+                    if self.is_advanced_mode:
+                        result = self.predict_gesture(handLms)  # 手勢模式
+                    else:
+                        result = str(self.detect_number(handLms, label))  # 數字模式
 
                     if label == "Left":
-                        left_hand_count = f"{count}"
+                        left_result = result
                     elif label == "Right":
-                        right_hand_count = f"{count}"
+                        right_result = result
 
                     self.mp_draw.draw_landmarks(image, handLms, self.mp_hands.HAND_CONNECTIONS)
 
-            self.left_hand_text.set(left_hand_count)
-            self.right_hand_text.set(right_hand_count)
+            # 更新 UI 上的顯示
+            self.left_hand_text.set(left_result)
+            self.right_hand_text.set(right_result)
 
             self.photo = ImageTk.PhotoImage(image=Image.fromarray(image))
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
@@ -157,6 +194,20 @@ class App:
         current_camera = (current_camera + 1) % len(video_sources)
         self.cap.release()
         self.cap = open_video_source(current_camera)
+
+    def switch_mode(self):
+        """切換模式，並修改 UI 文字"""
+        self.is_advanced_mode = not self.is_advanced_mode
+        mode_text = "手勢識別模式" if self.is_advanced_mode else "數字辨識模式"
+        self.mode_label.config(text=f"目前模式：{mode_text}")
+
+        # 修改 UI 文字
+        if self.is_advanced_mode:
+            self.left_hand_label.config(text="左手的手勢：")
+            self.right_hand_label.config(text="右手的手勢：")
+        else:
+            self.left_hand_label.config(text="左手比的數字：")
+            self.right_hand_label.config(text="右手比的數字：") 
 
     def on_closing(self):
         if self.cap.isOpened():
