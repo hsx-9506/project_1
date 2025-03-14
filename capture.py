@@ -11,8 +11,8 @@ with open(".vscode/setting.json", 'r', encoding='utf8') as jfile:
     jdata = json.load(jfile)
 
 # 讀取手勢識別模型
-model = load_model("gesture_model.h5")
-gesture_labels = ["victory ✌️", "fist ✊", "ok 👌", "middle 🖕", "thumbs_up 👍", "heart 🤏"]
+model = load_model("gesture_model/gesture_model.h5")
+gesture_labels = ["victory ✌️", "fist ✊", "ok 👌", "middle 🖕", "thumbs_up 👍", "heart 🫰"]
 
 # 預設使用 USB 攝影機 (0)，若無法開啟則改用串流
 video_sources = [0, jdata["video_source"]]
@@ -34,7 +34,7 @@ class App:
         self.window.title("🖐 手勢數字 & AI 手勢識別")
         self.window.configure(bg="#1e1e1e")
 
-        self.model = load_model("gesture_model.h5")
+        self.model = load_model("gesture_model/gesture_model.h5")
         with open(".vscode/gesture_labels.json", "r", encoding='utf8') as f:
             self.gesture_labels = json.load(f)
 
