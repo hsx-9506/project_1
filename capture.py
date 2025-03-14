@@ -34,6 +34,10 @@ class App:
         self.window.title("🖐 手勢數字 & AI 手勢識別")
         self.window.configure(bg="#1e1e1e")
 
+        self.model = load_model("gesture_model.h5")
+        with open(".vscode/gesture_labels.json", "r", encoding='utf8') as f:
+            self.gesture_labels = json.load(f)
+
         global current_camera
         self.cap = open_video_source(current_camera)
 
@@ -111,12 +115,11 @@ class App:
         self.window.bind("<c>", lambda event: self.switch_camera())
         self.window.bind("<m>", lambda event: self.switch_mode())
 
-    def detect_number(self, hand_landmarks, hand_type):
+    def detect_number(self, hand_landmarks, is_right):
         """計算手比的數字 (包含拇指)"""
         count = 0
         finger_tips = [8, 12, 16, 20]  # 食指～小指
         finger_pips = [6, 10, 14, 18]
-        
         for tip, pip in zip(finger_tips, finger_pips):
             if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
                 count += 1
@@ -125,33 +128,29 @@ class App:
         thumb_tip = hand_landmarks.landmark[4]
         thumb_ip = hand_landmarks.landmark[3]
 
-        if hand_type == "Right":  # 右手
-            if thumb_tip.x < thumb_ip.x:  
-                count += 1
-        else:  # 左手
-            if thumb_tip.x > thumb_ip.x:  
-                count += 1
+        if is_right and thumb_tip.x < thumb_ip.x:
+            count += 1
+        elif not is_right and thumb_tip.x > thumb_ip.x:
+            count += 1
 
         return count
     
     def predict_gesture(self, hand_landmarks):
-        """使用 AI 模型預測手勢，並加入信心門檻 & Top-2 修正"""
+        """使用 AI 模型預測手勢"""
         landmarks = []
         for lm in hand_landmarks.landmark:
             landmarks.extend([lm.x, lm.y])
 
-        data = np.array(landmarks).reshape(1, 42)  # 21 個點的 x, y 座標
-        prediction = model.predict(data)[0]  # 取得預測結果
-        top_2_indices = np.argsort(prediction)[-2:]  # 找到最高和次高的索引
-        top_1_index, top_2_index = top_2_indices[::-1]  # 最高 → 次高
-        top_1_confidence = prediction[top_1_index]
-        top_2_confidence = prediction[top_2_index]
+        # 轉換為 NumPy 陣列並進行預測
+        data = np.array(landmarks).reshape(1, 42)
+        prediction = self.model.predict(data)[0]
+        
+        # 取得機率最高的手勢
+        top_index = np.argmax(prediction)
+        confidence = prediction[top_index]
 
-        # 只顯示信心值超過 70% 的結果
-        if top_1_confidence >= 0.7:
-            return f"{gesture_labels[top_1_index]} ({top_1_confidence*100:.1f}%)"
-        elif top_2_confidence >= 0.5:  # 若最高的低於 70%，但次高的超過 50%
-            return f"{gesture_labels[top_2_index]} ({top_2_confidence*100:.1f}%)"
+        if confidence >= 0.7:
+            return f"{self.gesture_labels[top_index]} ({confidence*100:.1f}%)"
         else:
             return "不確定 🤔"
 
@@ -165,14 +164,15 @@ class App:
 
             if results.multi_hand_landmarks and results.multi_handedness:
                 for handLms, handLabel in zip(results.multi_hand_landmarks, results.multi_handedness):
-                    label = handLabel.classification[0].label  # "Left" or "Right"
-
-                    # 根據模式選擇數字辨識 or 手勢識別
+                    label = handLabel.classification[0].label  # Left or Right
+                    
+                    # 根據模式選擇數字識別或 AI 手勢識別
                     if self.is_advanced_mode:
-                        result = self.predict_gesture(handLms)  # 手勢模式
+                        result = self.predict_gesture(handLms)  # 使用 AI 手勢識別
                     else:
-                        result = str(self.detect_number(handLms, label))  # 數字模式
+                        result = str(self.detect_number(handLms, label == "Right"))  # 使用數字辨識
 
+                    # 根據手的類型（左 / 右）來更新結果
                     if label == "Left":
                         left_result = result
                     elif label == "Right":
@@ -180,7 +180,6 @@ class App:
 
                     self.mp_draw.draw_landmarks(image, handLms, self.mp_hands.HAND_CONNECTIONS)
 
-            # 更新 UI 上的顯示
             self.left_hand_text.set(left_result)
             self.right_hand_text.set(right_result)
 
