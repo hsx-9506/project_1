@@ -6,19 +6,19 @@ from PIL import Image, ImageTk
 from tensorflow.keras.models import load_model
 import numpy as np
 
-# 讀取設定
+# 讀取設定檔案，包含攝影機來源等參數
 with open(".vscode/setting.json", 'r', encoding='utf8') as jfile:
     jdata = json.load(jfile)
 
-# 讀取手勢識別模型
+# 載入手勢識別模型
 model = load_model("gesture_model/gesture_model.h5")
 gesture_labels = ["victory ✌️", "fist ✊", "ok 👌", "middle 🖕", "thumbs_up 👍", "heart 🫰"]
 
-# 預設使用 USB 攝影機 (0)，若無法開啟則改用串流
+# 定義攝影機來源，預設為 USB 攝影機 (0)，若無法開啟則使用設定檔中的串流來源
 video_sources = [0, jdata["video_source"]]
 current_camera = 0
 
-# 開啟攝影機
+# 開啟指定的攝影機來源
 def open_video_source(index):
     cap = cv2.VideoCapture(video_sources[index])
     if cap.isOpened():
@@ -28,16 +28,20 @@ def open_video_source(index):
         cap.release()
         raise ValueError(f"無法開啟攝影機: {video_sources[index]}")
 
+# 定義應用程式主類別
 class App:
     def __init__(self, window):
+        # 初始化主視窗
         self.window = window
         self.window.title("🖐 手勢數字 & AI 手勢識別")
         self.window.configure(bg="#1e1e1e")
 
+        # 載入手勢模型和標籤
         self.model = load_model("gesture_model/gesture_model.h5")
         with open(".vscode/gesture_labels.json", "r", encoding='utf8') as f:
             self.gesture_labels = json.load(f)
 
+        # 開啟攝影機
         global current_camera
         self.cap = open_video_source(current_camera)
 
@@ -50,9 +54,9 @@ class App:
                         font=("Microsoft JhengHei", 12, "bold"), padding=10, borderwidth=0, relief="flat")
         style.map("Rounded.TButton", background=[("active", "#505050")])  
 
-        # 主要 UI 佈局
-        self.video_frame = tk.Frame(window, bg="#1e1e1e")
-        self.control_frame = tk.Frame(window, bg="#252526", width=200)
+        # 設定主視窗的佈局
+        self.video_frame = tk.Frame(window, bg="#1e1e1e")  # 顯示影像的區域
+        self.control_frame = tk.Frame(window, bg="#252526", width=200)  # 控制按鈕的區域
 
         self.video_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         self.control_frame.grid(row=1, column=1, padx=10, pady=10, sticky="ns")
@@ -61,7 +65,7 @@ class App:
         window.grid_columnconfigure(0, weight=3)  
         window.grid_columnconfigure(1, weight=1)  
 
-        # 影像顯示區
+        # 設定影像顯示區
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -87,7 +91,7 @@ class App:
                                            bg="#252526", fg="white")
         self.right_hand_display.pack(pady=5)
 
-        # 按鈕區
+        # 控制按鈕區
         self.switch_button = ttk.Button(self.control_frame, text="切換攝影機 (C)", style="Rounded.TButton", command=self.switch_camera)
         self.switch_button.pack(pady=10)
 
@@ -101,17 +105,18 @@ class App:
         self.exit_button = ttk.Button(self.control_frame, text="退出", style="Rounded.TButton", command=self.on_closing)
         self.exit_button.pack(pady=10)
 
-        # 變數
-        self.is_advanced_mode = False
-        self.mp_hands = mp.solutions.hands
+        # 初始化變數
+        self.is_advanced_mode = False  # 模式切換標誌
+        self.mp_hands = mp.solutions.hands  # Mediapipe 手部模型
         self.hands = self.mp_hands.Hands(static_image_mode=False, max_num_hands=2,
                                          min_detection_confidence=0.7, min_tracking_confidence=0.5)
-        self.mp_draw = mp.solutions.drawing_utils
+        self.mp_draw = mp.solutions.drawing_utils  # Mediapipe 繪圖工具
 
-        self.delay = 5
-        self.update()
-        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.delay = 5  # 更新影像的延遲時間 (毫秒)
+        self.update()  # 啟動影像更新
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)  # 關閉視窗時釋放資源
 
+        # 綁定快捷鍵
         self.window.bind("<c>", lambda event: self.switch_camera())
         self.window.bind("<m>", lambda event: self.switch_mode())
 
