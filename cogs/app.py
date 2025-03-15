@@ -55,9 +55,20 @@ class App:
 
     def switch_mode(self):
         """切換模式"""
+        # 切換模式標誌
         self.is_advanced_mode = not self.is_advanced_mode
+
+        # 更新模式標籤文字
         mode_text = "手勢識別模式" if self.is_advanced_mode else "數字辨識模式"
         self.ui_elements["mode_label"].config(text=f"目前模式：{mode_text}")
+
+        # 根據模式更新左手和右手的標籤文字
+        if self.is_advanced_mode:
+            self.ui_elements["left_hand_label"].config(text="左手的手勢：")
+            self.ui_elements["right_hand_label"].config(text="右手的手勢：")
+        else:
+            self.ui_elements["left_hand_label"].config(text="左手比的數字：")
+            self.ui_elements["right_hand_label"].config(text="右手比的數字：")
 
     def on_closing(self):
         """釋放資源並關閉視窗"""

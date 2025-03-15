@@ -1,4 +1,4 @@
-from tkinter import ttk, Canvas, StringVar, Label
+from tkinter import ttk, StringVar, Label, Canvas
 
 def setup_ui(window, app):
     """設定 UI 元素"""
@@ -26,16 +26,16 @@ def setup_ui(window, app):
     canvas.pack(fill="both", expand=True)
 
     # 左手顯示區
-    left_hand_text = StringVar()
     left_hand_label = Label(control_frame, text="左手比的數字：", font=("Microsoft JhengHei", 14, "bold"), bg="#252526", fg="white")
     left_hand_label.pack(pady=5)
+    left_hand_text = StringVar()
     left_hand_display = Label(control_frame, textvariable=left_hand_text, font=("Microsoft JhengHei", 12), bg="#252526", fg="white")
     left_hand_display.pack(pady=5)
 
     # 右手顯示區
-    right_hand_text = StringVar()
     right_hand_label = Label(control_frame, text="右手比的數字：", font=("Microsoft JhengHei", 14, "bold"), bg="#252526", fg="white")
     right_hand_label.pack(pady=5)
+    right_hand_text = StringVar()
     right_hand_display = Label(control_frame, textvariable=right_hand_text, font=("Microsoft JhengHei", 12), bg="#252526", fg="white")
     right_hand_display.pack(pady=5)
 
@@ -53,6 +53,8 @@ def setup_ui(window, app):
 
     return {
         "canvas": canvas,
+        "left_hand_label": left_hand_label,
+        "right_hand_label": right_hand_label,
         "left_hand_text": left_hand_text,
         "right_hand_text": right_hand_text,
         "mode_label": mode_label
