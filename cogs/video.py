@@ -16,3 +16,4 @@ def open_video_source(index):
     else:
         cap.release()
         raise ValueError(f"無法開啟攝影機: {video_sources[index]}")
+    
