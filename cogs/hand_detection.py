@@ -40,21 +40,45 @@ class HandDetection:
 
         return left_result, right_result, image
 
+    
     def detect_number(self, hand_landmarks, is_right):
-        """計算手比的數字"""
+        """計算手比的數字 (前/後翻 + 左右手正確的拇指判斷)"""
         count = 0
+        # 1. 食指～小指伸直判斷
         finger_tips = [8, 12, 16, 20]
         finger_pips = [6, 10, 14, 18]
         for tip, pip in zip(finger_tips, finger_pips):
             if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
                 count += 1
 
+        # 2. 掌面朝向偵測 (cross product)
+        w = hand_landmarks.landmark[0]   # Wrist
+        i = hand_landmarks.landmark[5]   # Index_MCP
+        p = hand_landmarks.landmark[17]  # Pinky_MCP
+        v1 = np.array([ i.x - w.x,  i.y - w.y ])
+        v2 = np.array([ p.x - w.x,  p.y - w.y ])
+        cross_z = v1[0]*v2[1] - v1[1]*v2[0]
+
+        # 右手、左手分別取不同條件
+        if is_right:
+            palm_facing = (cross_z > 0)   # 右手：cross_z>0 表示掌面朝前
+        else:
+            palm_facing = (cross_z < 0)   # 左手：cross_z<0 表示掌面朝前
+
+        # 3. 拇指伸出判斷
         thumb_tip = hand_landmarks.landmark[4]
-        thumb_ip = hand_landmarks.landmark[3]
-        if is_right and thumb_tip.x < thumb_ip.x:
-            count += 1
-        elif not is_right and thumb_tip.x > thumb_ip.x:
-            count += 1
+        thumb_ip  = hand_landmarks.landmark[3]
+
+        if is_right:
+            # 右手：掌面朝前時 tip.x < ip.x；掌背朝前時反向
+            if (palm_facing     and thumb_tip.x < thumb_ip.x) \
+            or (not palm_facing and thumb_tip.x > thumb_ip.x):
+                count += 1
+        else:
+            # 左手：掌面朝前時 tip.x > ip.x；掌背朝前時反向
+            if (palm_facing     and thumb_tip.x > thumb_ip.x) \
+            or (not palm_facing and thumb_tip.x < thumb_ip.x):
+                count += 1
 
         return count
 
